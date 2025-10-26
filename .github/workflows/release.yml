@@ -41,6 +41,78 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Update manifest.json version
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          
+          # Update version in manifest.json
+          jq --arg version "$VERSION" '.version = $version' .claude-plugin/manifest.json > .claude-plugin/manifest.json.tmp
+          mv .claude-plugin/manifest.json.tmp .claude-plugin/manifest.json
+          
+          echo "Updated manifest.json to version $VERSION"
+          cat .claude-plugin/manifest.json
+
+      - name: Generate changelog entry
+        id: changelog
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          DATE=$(date +%Y-%m-%d)
+          
+          # Generate release notes from commits since last tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # First release - get all commits
+            git log --pretty=format:"- %s" --no-merges > /tmp/commits.txt
+          else
+            # Get commits since previous tag
+            git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --no-merges > /tmp/commits.txt
+          fi
+          
+          # Create changelog entry in a temporary file
+          {
+            echo "## [$VERSION] - $DATE"
+            echo ""
+            echo "### Changes"
+            cat /tmp/commits.txt
+            echo ""
+            echo ""
+          } > /tmp/changelog_entry.txt
+          
+          # Create or update CHANGE_LOG.md
+          if [ -f CHANGE_LOG.md ]; then
+            # Prepend new entry to existing changelog
+            cat /tmp/changelog_entry.txt CHANGE_LOG.md > CHANGE_LOG.md.tmp
+            mv CHANGE_LOG.md.tmp CHANGE_LOG.md
+          else
+            # Create new changelog with header
+            {
+              echo "# Changelog"
+              echo ""
+              echo "All notable changes to this project will be documented in this file."
+              echo ""
+            } > CHANGE_LOG.md
+            cat /tmp/changelog_entry.txt >> CHANGE_LOG.md
+          fi
+          
+          echo "Generated changelog entry for version $VERSION"
+          echo "---"
+          head -20 CHANGE_LOG.md
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          git add .claude-plugin/manifest.json CHANGE_LOG.md
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update version to ${{ steps.get_version.outputs.VERSION }} and changelog"
+            git push
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -61,6 +133,9 @@ jobs:
             ```
 
             Or manually clone this repository to your `.claude/plugins` directory.
+
+            ### Changes
+            See [CHANGE_LOG.md](CHANGE_LOG.md) for detailed changes in this release.
 
             ---
           draft: false
