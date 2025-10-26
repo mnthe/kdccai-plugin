@@ -57,16 +57,17 @@ jobs:
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           DATE=$(date +%Y-%m-%d)
+          TEMP_DIR="${{ runner.temp }}"
           
           # Generate release notes from commits since last tag
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --exclude="${{ github.ref_name }}" 2>/dev/null || echo "")
           
           if [ -z "$PREVIOUS_TAG" ]; then
             # First release - get all commits
-            git log --pretty=format:"- %s" --no-merges > /tmp/commits.txt
+            git log --pretty=format:"- %s" --no-merges > "${TEMP_DIR}/commits.txt"
           else
             # Get commits since previous tag
-            git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --no-merges > /tmp/commits.txt
+            git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --no-merges > "${TEMP_DIR}/commits.txt"
           fi
           
           # Create changelog entry in a temporary file
@@ -74,15 +75,15 @@ jobs:
             echo "## [$VERSION] - $DATE"
             echo ""
             echo "### Changes"
-            cat /tmp/commits.txt
+            cat "${TEMP_DIR}/commits.txt"
             echo ""
             echo ""
-          } > /tmp/changelog_entry.txt
+          } > "${TEMP_DIR}/changelog_entry.txt"
           
           # Create or update CHANGE_LOG.md
           if [ -f CHANGE_LOG.md ]; then
             # Prepend new entry to existing changelog
-            cat /tmp/changelog_entry.txt CHANGE_LOG.md > CHANGE_LOG.md.tmp
+            cat "${TEMP_DIR}/changelog_entry.txt" CHANGE_LOG.md > CHANGE_LOG.md.tmp
             mv CHANGE_LOG.md.tmp CHANGE_LOG.md
           else
             # Create new changelog with header
@@ -92,7 +93,7 @@ jobs:
               echo "All notable changes to this project will be documented in this file."
               echo ""
             } > CHANGE_LOG.md
-            cat /tmp/changelog_entry.txt >> CHANGE_LOG.md
+            cat "${TEMP_DIR}/changelog_entry.txt" >> CHANGE_LOG.md
           fi
           
           echo "Generated changelog entry for version $VERSION"
