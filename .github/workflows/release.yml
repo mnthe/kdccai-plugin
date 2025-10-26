@@ -41,18 +41,25 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Update manifest.json version
+      - name: Verify manifest.json version matches tag
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          TAG_VERSION="${{ steps.get_version.outputs.VERSION }}"
+          MANIFEST_VERSION=$(jq -r '.version' .claude-plugin/manifest.json)
           
-          # Update version in manifest.json
-          jq --arg version "$VERSION" '.version = $version' .claude-plugin/manifest.json > .claude-plugin/manifest.json.tmp
-          mv .claude-plugin/manifest.json.tmp .claude-plugin/manifest.json
+          echo "Tag version: $TAG_VERSION"
+          echo "Manifest version: $MANIFEST_VERSION"
           
-          echo "Updated manifest.json to version $VERSION"
-          cat .claude-plugin/manifest.json
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "❌ Error: Version mismatch!"
+            echo "The version in manifest.json ($MANIFEST_VERSION) does not match the tag ($TAG_VERSION)"
+            echo ""
+            echo "Please update .claude-plugin/manifest.json to version $TAG_VERSION and commit before creating the tag."
+            exit 1
+          fi
+          
+          echo "✓ Version verified: $TAG_VERSION"
 
-      - name: Generate changelog entry
+      - name: Update or create CHANGE_LOG.md
         id: changelog
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
@@ -70,48 +77,67 @@ jobs:
             git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --no-merges > "${TEMP_DIR}/commits.txt"
           fi
           
-          # Create changelog entry in a temporary file
+          # Create changelog entry
           {
             echo "## [$VERSION] - $DATE"
             echo ""
             echo "### Changes"
             cat "${TEMP_DIR}/commits.txt"
             echo ""
-            echo ""
           } > "${TEMP_DIR}/changelog_entry.txt"
           
-          # Create or update CHANGE_LOG.md
+          # Check if CHANGE_LOG.md exists and is up to date
           if [ -f CHANGE_LOG.md ]; then
-            # Prepend new entry to existing changelog
-            cat "${TEMP_DIR}/changelog_entry.txt" CHANGE_LOG.md > CHANGE_LOG.md.tmp
-            mv CHANGE_LOG.md.tmp CHANGE_LOG.md
+            # Check if this version already exists in changelog
+            if grep -q "## \[$VERSION\]" CHANGE_LOG.md; then
+              echo "✓ CHANGE_LOG.md already contains entry for version $VERSION"
+            else
+              echo "⚠️  Warning: CHANGE_LOG.md exists but doesn't contain entry for version $VERSION"
+              echo "Consider updating CHANGE_LOG.md before tagging the release."
+            fi
           else
-            # Create new changelog with header
+            echo "⚠️  Warning: CHANGE_LOG.md does not exist"
+            echo "Consider creating CHANGE_LOG.md before tagging the release."
+          fi
+          
+          # Save generated changelog for release notes
+          cat "${TEMP_DIR}/changelog_entry.txt" > "${TEMP_DIR}/release_notes.txt"
+          echo "Generated release notes for version $VERSION"
+
+      - name: Commit changelog if missing
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          TEMP_DIR="${{ runner.temp }}"
+          
+          # Only commit if CHANGE_LOG.md doesn't exist or doesn't have this version
+          NEEDS_UPDATE=false
+          
+          if [ ! -f CHANGE_LOG.md ]; then
+            NEEDS_UPDATE=true
             {
               echo "# Changelog"
               echo ""
               echo "All notable changes to this project will be documented in this file."
               echo ""
             } > CHANGE_LOG.md
-            cat "${TEMP_DIR}/changelog_entry.txt" >> CHANGE_LOG.md
+            cat "${TEMP_DIR}/release_notes.txt" >> CHANGE_LOG.md
+            echo "Created CHANGE_LOG.md"
+          elif ! grep -q "## \[$VERSION\]" CHANGE_LOG.md; then
+            NEEDS_UPDATE=true
+            cat "${TEMP_DIR}/release_notes.txt" CHANGE_LOG.md > CHANGE_LOG.md.tmp
+            mv CHANGE_LOG.md.tmp CHANGE_LOG.md
+            echo "Updated CHANGE_LOG.md with version $VERSION"
           fi
           
-          echo "Generated changelog entry for version $VERSION"
-          echo "---"
-          head -20 CHANGE_LOG.md
-
-      - name: Commit and push changes
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          
-          git add .claude-plugin/manifest.json CHANGE_LOG.md
-          
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: update version to ${{ steps.get_version.outputs.VERSION }} and changelog"
+          if [ "$NEEDS_UPDATE" = true ]; then
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git add CHANGE_LOG.md
+            git commit -m "chore: add changelog entry for $VERSION [skip ci]"
             git push
+            echo "✓ Committed CHANGE_LOG.md"
+          else
+            echo "✓ CHANGE_LOG.md is up to date"
           fi
 
       - name: Create Release
