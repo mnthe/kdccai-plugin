@@ -1,6 +1,12 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.2.0 - without v prefix)'
+        required: true
+        type: string
   push:
     tags:
       - 'v*.*.*'
@@ -15,6 +21,54 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Determine version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            
+            # Validate version format (semantic versioning)
+            if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "❌ Error: Invalid version format: $VERSION"
+              echo "Version must follow semantic versioning (e.g., 0.2.0, 1.0.0)"
+              exit 1
+            fi
+            
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+            echo "TAG=v$VERSION" >> $GITHUB_OUTPUT
+            echo "MODE=manual" >> $GITHUB_OUTPUT
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "MODE=tag" >> $GITHUB_OUTPUT
+          fi
+          echo "Release version: $VERSION"
+          echo "Release mode: ${{ github.event_name }}"
+
+      - name: Update manifest.json
+        if: steps.get_version.outputs.MODE == 'manual'
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          
+          # Install jq if not available
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          
+          # Update version in manifest.json
+          jq --arg version "$VERSION" '.version = $version' .claude-plugin/manifest.json > tmp.json
+          mv tmp.json .claude-plugin/manifest.json
+          
+          echo "✓ Updated manifest.json to version $VERSION"
+          cat .claude-plugin/manifest.json
 
       - name: Validate manifest.json
         run: |
@@ -37,17 +91,122 @@ jobs:
           echo "Plugin Description: $(jq -r '.description' .claude-plugin/manifest.json)"
           echo "Plugin Author: $(jq -r '.author' .claude-plugin/manifest.json)"
 
-      - name: Get version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Verify version match
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          MANIFEST_VERSION=$(jq -r '.version' .claude-plugin/manifest.json)
+          
+          echo "Expected version: $VERSION"
+          echo "Manifest version: $MANIFEST_VERSION"
+          
+          if [ "$VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "❌ Error: Version mismatch!"
+            echo "The version in manifest.json ($MANIFEST_VERSION) does not match the target version ($VERSION)"
+            exit 1
+          fi
+          
+          echo "✓ Version verified: $VERSION"
+
+      - name: Generate changelog entry
+        id: changelog
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          DATE=$(date +%Y-%m-%d)
+          TEMP_DIR="${{ runner.temp }}"
+          
+          # Get previous tag for changelog
+          if [ "${{ steps.get_version.outputs.MODE }}" == "manual" ]; then
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          else
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 --exclude="${{ steps.get_version.outputs.TAG }}" 2>/dev/null || echo "")
+          fi
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "First release - including all commits"
+            git log --pretty=format:"- %s" --no-merges > "${TEMP_DIR}/commits.txt"
+          else
+            echo "Getting commits since $PREVIOUS_TAG"
+            git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --no-merges > "${TEMP_DIR}/commits.txt"
+          fi
+          
+          # Create changelog entry
+          {
+            echo "## [$VERSION] - $DATE"
+            echo ""
+            echo "### Changes"
+            cat "${TEMP_DIR}/commits.txt"
+            echo ""
+          } > "${TEMP_DIR}/changelog_entry.txt"
+          
+          cat "${TEMP_DIR}/changelog_entry.txt"
+
+      - name: Update CHANGE_LOG.md
+        if: steps.get_version.outputs.MODE == 'manual'
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          TEMP_DIR="${{ runner.temp }}"
+          
+          if [ ! -f CHANGE_LOG.md ]; then
+            {
+              echo "# Changelog"
+              echo ""
+              echo "All notable changes to this project will be documented in this file."
+              echo ""
+            } > CHANGE_LOG.md
+            cat "${TEMP_DIR}/changelog_entry.txt" >> CHANGE_LOG.md
+            echo "✓ Created CHANGE_LOG.md"
+          elif ! grep -q "## \[$VERSION\]" CHANGE_LOG.md; then
+            cat "${TEMP_DIR}/changelog_entry.txt" CHANGE_LOG.md > CHANGE_LOG.md.tmp
+            mv CHANGE_LOG.md.tmp CHANGE_LOG.md
+            echo "✓ Updated CHANGE_LOG.md"
+          else
+            echo "✓ CHANGE_LOG.md already contains version $VERSION"
+          fi
+
+      - name: Commit and tag
+        if: steps.get_version.outputs.MODE == 'manual'
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          TAG="${{ steps.get_version.outputs.TAG }}"
+          
+          # Add files to staging
+          git add .claude-plugin/manifest.json CHANGE_LOG.md
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: prepare release $TAG"
+            
+            # Get current branch and push
+            CURRENT_BRANCH=$(git branch --show-current)
+            if [ -z "$CURRENT_BRANCH" ]; then
+              echo "Error: Not on a branch"
+              exit 1
+            fi
+            
+            git push origin "$CURRENT_BRANCH"
+            echo "✓ Committed and pushed changes to $CURRENT_BRANCH"
+          fi
+          
+          # Create and push tag
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "⚠️  Warning: Tag $TAG already exists"
+            exit 1
+          fi
+          
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          echo "✓ Created and pushed tag $TAG"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ steps.get_version.outputs.TAG }}
+          name: Release ${{ steps.get_version.outputs.TAG }}
           generate_release_notes: true
           body: |
-            ## Claude Plugin Release ${{ github.ref_name }}
+            ## Claude Plugin Release ${{ steps.get_version.outputs.TAG }}
 
             **Plugin:** kdccai-plugin
             **Version:** ${{ steps.get_version.outputs.VERSION }}
@@ -61,6 +220,9 @@ jobs:
             ```
 
             Or manually clone this repository to your `.claude/plugins` directory.
+
+            ### Changes
+            See [CHANGE_LOG.md](CHANGE_LOG.md) for detailed changes in this release.
 
             ---
           draft: false
