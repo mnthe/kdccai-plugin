@@ -1,6 +1,12 @@
 {
-  "name": "kdccai-plugin",
-  "version": "0.1.0",
-  "description": "Claude plugin for KDC Club activity management and automation",
-  "author": "Junghun Kim"
+  "name": "kdccai",
+  "version": "0.1.1",
+  "description": "KDC Club AI - AI-assisted coding skills for non-developers: project initialization, planning, implementation, and debugging with Python automation tools",
+  "author": "mnthe",
+  "commands": [
+    "commands"
+  ],
+  "skills": [
+    "skills"
+  ]
 }
