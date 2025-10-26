@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate manifest.json
+        run: |
+          if [ ! -f .claude-plugin/manifest.json ]; then
+            echo "Error: manifest.json not found"
+            exit 1
+          fi
+
+          # Check if jq is available, if not install it
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+
+          # Validate JSON syntax
+          jq empty .claude-plugin/manifest.json
+
+          # Extract and display plugin information
+          echo "Plugin Name: $(jq -r '.name' .claude-plugin/manifest.json)"
+          echo "Plugin Version: $(jq -r '.version' .claude-plugin/manifest.json)"
+          echo "Plugin Description: $(jq -r '.description' .claude-plugin/manifest.json)"
+          echo "Plugin Author: $(jq -r '.author' .claude-plugin/manifest.json)"
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            ## Claude Plugin Release ${{ github.ref_name }}
+
+            **Plugin:** kdccai-plugin
+            **Version:** ${{ steps.get_version.outputs.VERSION }}
+
+            This release contains the Claude Code plugin for KDC club activity management.
+
+            ### Installation
+            To install this plugin, use the following command in Claude Code:
+            ```
+            /plugin install https://github.com/mnthe/kdccai-plugin
+            ```
+
+            Or manually clone this repository to your `.claude/plugins` directory.
+          draft: false
+          prerelease: false
