@@ -1,6 +1,6 @@
 {
   "name": "kdccai",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "KDC Club AI - AI-assisted coding skills for non-developers: project initialization, planning, implementation, and debugging with Python automation tools",
   "author": "Junghun Kim (mnthe)",
   "commands": [

@@ -1,3 +1,8 @@
+## [1.1.0] - 2025-10-26
+
+### Changes
+- feat(security): add automatic gitignore configuration with security patterns
+- Update release.yml
 # Changelog
 
 All notable changes to this project will be documented in this file.
