@@ -78,13 +78,18 @@ def run_tests_for_marker(marker: str) -> Dict[str, any]:
 
     Returns:
         Dict with 'passed', 'failed', 'error' counts
+
+    Note:
+        Tests are given 60 seconds to complete. This timeout is chosen to accommodate
+        scenarios that may involve file I/O, API calls, or data processing operations
+        that could take longer than typical unit tests.
     """
     try:
         result = subprocess.run(
             ['pytest', '-m', marker, '-v', '--tb=short'],
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=60  # 60 seconds timeout for scenarios with I/O or API calls
         )
 
         output = result.stdout + result.stderr

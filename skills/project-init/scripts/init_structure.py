@@ -10,6 +10,7 @@ If project_root is not provided, uses current directory.
 
 import sys
 import os
+import subprocess
 from pathlib import Path
 
 
@@ -43,7 +44,7 @@ def create_directory_structure(project_root: Path) -> None:
     if not git_dir.exists():
         print("Initializing git repository...")
         os.chdir(project_root)
-        os.system("git init")
+        subprocess.run(['git', 'init'], check=True)
         print("  ✓ git repository initialized")
 
 
