@@ -46,7 +46,28 @@ This plugin uses semantic versioning (SemVer) and automated releases via GitHub 
 
 ### Creating a Release
 
-To create a new release, follow these steps:
+This project supports two ways to create a release:
+
+#### Option 1: Automated Release (Recommended)
+
+Use GitHub Actions to automatically update files, create tag, and release:
+
+1. Go to **Actions** tab in GitHub
+2. Select **Release** workflow
+3. Click **Run workflow**
+4. Enter the version number (e.g., `0.2.0` - without 'v' prefix)
+5. Click **Run workflow**
+
+GitHub Actions will automatically:
+- Update `manifest.json` to the specified version
+- Generate/update `CHANGE_LOG.md` with commit history
+- Commit the changes
+- Create and push the version tag
+- Create a GitHub release with installation instructions
+
+#### Option 2: Manual Release
+
+Follow these steps to manually prepare and tag a release:
 
 1. **Update the version in `.claude-plugin/manifest.json`**
    ```bash
@@ -74,7 +95,6 @@ To create a new release, follow these steps:
 
 5. **GitHub Actions will automatically:**
    - Verify that manifest.json version matches the tag
-   - Create or update CHANGE_LOG.md if not already done
    - Create a GitHub release with installation instructions
    - Generate release notes from commits
 

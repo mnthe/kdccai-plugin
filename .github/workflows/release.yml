@@ -33,6 +33,14 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
+            
+            # Validate version format (semantic versioning)
+            if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "❌ Error: Invalid version format: $VERSION"
+              echo "Version must follow semantic versioning (e.g., 0.2.0, 1.0.0)"
+              exit 1
+            fi
+            
             echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
             echo "TAG=v$VERSION" >> $GITHUB_OUTPUT
             echo "MODE=manual" >> $GITHUB_OUTPUT
@@ -43,6 +51,7 @@ jobs:
             echo "MODE=tag" >> $GITHUB_OUTPUT
           fi
           echo "Release version: $VERSION"
+          echo "Release mode: ${{ github.event_name }}"
 
       - name: Update manifest.json
         if: steps.get_version.outputs.MODE == 'manual'
@@ -160,17 +169,32 @@ jobs:
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           TAG="${{ steps.get_version.outputs.TAG }}"
           
+          # Add files to staging
+          git add .claude-plugin/manifest.json CHANGE_LOG.md
+          
           # Check if there are changes to commit
-          if git diff --staged --quiet && git diff --quiet; then
+          if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git add .claude-plugin/manifest.json CHANGE_LOG.md
-            git commit -m "chore: prepare release $TAG" || echo "Nothing to commit"
-            git push origin main
-            echo "✓ Committed changes"
+            git commit -m "chore: prepare release $TAG"
+            
+            # Get current branch and push
+            CURRENT_BRANCH=$(git branch --show-current)
+            if [ -z "$CURRENT_BRANCH" ]; then
+              echo "Error: Not on a branch"
+              exit 1
+            fi
+            
+            git push origin "$CURRENT_BRANCH"
+            echo "✓ Committed and pushed changes to $CURRENT_BRANCH"
           fi
           
           # Create and push tag
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "⚠️  Warning: Tag $TAG already exists"
+            exit 1
+          fi
+          
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
           echo "✓ Created and pushed tag $TAG"
