@@ -1,7 +1,5 @@
 # KDCCAI (KDC Club AI)
 
-**KDC** = Krafton Developer Connect
-
 AI-assisted coding skills for non-developers. Build Python automation tools with guided workflows for project initialization, planning, implementation, and debugging.
 
 ## Overview
