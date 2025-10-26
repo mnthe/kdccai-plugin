@@ -216,7 +216,8 @@ jobs:
             ### Installation
             To install this plugin, use the following command in Claude Code:
             ```
-            /plugin install https://github.com/mnthe/kdccai-plugin
+            /plugin marketplace add mnthe/marketplace-for-kdccai
+            /plugin install kdccai
             ```
 
             Or manually clone this repository to your `.claude/plugins` directory.
