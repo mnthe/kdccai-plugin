@@ -22,15 +22,15 @@ jobs:
             echo "Error: manifest.json not found"
             exit 1
           fi
-          
+
           # Check if jq is available, if not install it
           if ! command -v jq &> /dev/null; then
             sudo apt-get update && sudo apt-get install -y jq
           fi
-          
+
           # Validate JSON syntax
           jq empty .claude-plugin/manifest.json
-          
+
           # Extract and display plugin information
           echo "Plugin Name: $(jq -r '.name' .claude-plugin/manifest.json)"
           echo "Plugin Version: $(jq -r '.version' .claude-plugin/manifest.json)"
@@ -50,18 +50,18 @@ jobs:
           release_name: Release ${{ github.ref_name }}
           body: |
             ## Claude Plugin Release ${{ github.ref_name }}
-            
+
             **Plugin:** kdccai-plugin
             **Version:** ${{ steps.get_version.outputs.VERSION }}
-            
+
             This release contains the Claude Code plugin for KDC club activity management.
-            
+
             ### Installation
             To install this plugin, use the following command in Claude Code:
             ```
             /plugin install https://github.com/mnthe/kdccai-plugin
             ```
-            
+
             Or manually clone this repository to your `.claude/plugins` directory.
           draft: false
           prerelease: false
