@@ -153,10 +153,16 @@ This skill initializes new automation tool projects for non-developers. It guide
    ```
 
 3. **Create .gitignore**:
-   ```
-   Read: assets/gitignore-python.template
-   Write: .gitignore (copy template content)
-   ```
+
+   The `init_structure.py` script automatically copies the gitignore template.
+
+   Template includes:
+   - Python artifacts (__pycache__, *.pyc, etc.)
+   - Virtual environments (venv/, env/, etc.)
+   - IDE files (.vscode/, .idea/, etc.)
+   - Environment variables (.env, .env.local)
+   - **Configuration files (config.yaml, config.json, credentials.json)** ← Security!
+   - Test artifacts (.pytest_cache/, .coverage, etc.)
 
 4. **Initialize git repository** (if not already initialized):
    ```bash

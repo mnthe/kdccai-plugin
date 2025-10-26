@@ -32,12 +32,17 @@ def create_directory_structure(project_root: Path) -> None:
         dir_path.mkdir(parents=True, exist_ok=True)
         print(f"  ✓ {directory}/")
 
-    # Create .gitignore if it doesn't exist
+    # Create .gitignore from template
     gitignore_path = project_root / ".gitignore"
     if not gitignore_path.exists():
-        print("Creating .gitignore...")
-        gitignore_path.touch()
-        print("  ✓ .gitignore (empty - to be filled by skill)")
+        print("Creating .gitignore from template...")
+        template_path = Path(__file__).parent.parent / "assets" / "gitignore-python.template"
+        if template_path.exists():
+            gitignore_path.write_text(template_path.read_text())
+            print("  ✓ .gitignore (from template)")
+        else:
+            gitignore_path.touch()
+            print("  ✓ .gitignore (empty - template not found)")
 
     # Initialize git if not already initialized
     git_dir = project_root / ".git"
