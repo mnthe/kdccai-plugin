@@ -48,5 +48,11 @@ docs/_build/
 .env
 .env.local
 
+# Configuration files (API keys, secrets)
+config.yaml
+config.json
+*.secret.*
+credentials.json
+
 # Project-specific
 # Add your custom ignores below this line
