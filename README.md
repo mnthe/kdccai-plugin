@@ -65,13 +65,37 @@ project/
 
 ### Install Plugin
 
-#### Using Claude Code Plugin Command
+#### Option 1: From Marketplace (Recommended)
+
+This plugin is hosted in the [KDCCAI Plugin Marketplace](https://github.com/mnthe/marketplace-for-kdccai).
+
+1. **Add the marketplace** (one-time setup):
+   ```bash
+   /plugin marketplace add mnthe/marketplace-for-kdccai
+   ```
+
+2. **Install the plugin**:
+   ```bash
+   /plugin install kdccai@marketplace-for-kdccai
+   ```
+
+   Or browse and install interactively:
+   ```bash
+   /plugin
+   ```
+
+3. **Verify installation**:
+   ```bash
+   /plugin list
+   ```
+
+#### Option 2: Direct Installation from GitHub
 
 ```bash
 /plugin install https://github.com/mnthe/kdccai-plugin
 ```
 
-#### Manual Installation
+#### Option 3: Manual Installation
 
 1. Clone this repository to your Claude plugins directory:
    ```bash
@@ -497,6 +521,7 @@ Junghun Kim (mnthe)
 
 ## References
 
+- [KDCCAI Plugin Marketplace](https://github.com/mnthe/marketplace-for-kdccai) - Official marketplace for installing this plugin
 - [Claude Code Plugin Documentation](https://docs.claude.com/en/docs/claude-code/plugins-reference)
 - [Claude Code Plugin Marketplaces](https://docs.claude.com/en/docs/claude-code/plugin-marketplaces)
 
